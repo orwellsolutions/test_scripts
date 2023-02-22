@@ -37,5 +37,8 @@ while url:
         with open(local_path, "wb") as f:
             f.write(response.content)
     
-    url = data["continuationToken"]
+    if "continuationToken" in data:
+        url = f"{nexus_url}/service/rest/v1/search/assets?continuationToken={data['continuationToken']}"
+    else:
+        break
 

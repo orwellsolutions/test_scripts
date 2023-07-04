@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import urllib3
 
 # If the token is set in the environment, use it
 access_token = os.getenv('GITLAB_ACCESS_TOKEN')
@@ -16,12 +17,16 @@ headers = {
     'Private-Token': access_token
 }
 
+# Suppress warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 page = 1
 per_page = 100  # Maximum allowed by GitLab
+count = 0  # Counter for repos with .gitlab-ci.yml
 
 while True:
     # Send GET request to GitLab's API
-    response = requests.get(f'{gitlab_url}?page={page}&per_page={per_page}', headers=headers)
+    response = requests.get(f'{gitlab_url}?page={page}&per_page={per_page}', headers=headers, verify=False)
 
     # If request is successful
     if response.status_code == 200:
@@ -32,12 +37,19 @@ while True:
         if not data:
             break
 
-        # Loop through each project in the response and print its name
+        # Loop through each project in the response
         for project in data:
-            print(project['name'])
+            project_id = project['id']
+            # Check if the .gitlab-ci.yml file exists in the root directory of the repo
+            file_response = requests.get(f'{gitlab_url}/{project_id}/repository/files/.gitlab-ci.yml/raw?ref=main', headers=headers, verify=False)
+            if file_response.status_code == 200:
+                count += 1
+                print(project['name'])
 
         # Go to the next page
         page += 1
     else:
         print(f'Error: Unable to get the list of projects. Status code {response.status_code}')
         break
+
+print(f"Number of projects with .gitlab-ci.yml file: {count}")

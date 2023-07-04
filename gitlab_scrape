@@ -1,0 +1,43 @@
+import requests
+import json
+import argparse
+
+# Argument parsing
+parser = argparse.ArgumentParser(description="Check for .gitlab-ci.yml in GitLab projects")
+parser.add_argument('-s', '--subfolder', help="Subfolder to check for .gitlab-ci.yml", default="")
+args = parser.parse_args()
+
+# GitLab personal access token
+gitlab_token = 'your_gitlab_token'
+username = 'your_username'
+
+# List all projects of a user
+page = 1
+while True:
+    response = requests.get(
+        f'https://gitlab.com/api/v4/users/{username}/projects?page={page}&per_page=100',
+        headers={'Private-Token': gitlab_token}
+    )
+
+    if response.status_code != 200:
+        print("Failed to fetch projects.")
+        break
+
+    projects = response.json()
+    if not projects:
+        break  # No more projects
+
+    # Check for .gitlab-ci.yml in each project
+    for project in projects:
+        project_id = project['id']
+        file_path = f"{args.subfolder}/.gitlab-ci.yml" if args.subfolder else ".gitlab-ci.yml"
+        response = requests.get(
+            f'https://gitlab.com/api/v4/projects/{project_id}/repository/files/{file_path}/raw',
+            headers={'Private-Token': gitlab_token}
+        )
+        if response.status_code == 200:
+            print(f"Project '{project['name']}' contains a .gitlab-ci.yml file in '{args.subfolder if args.subfolder else 'root'}'.")
+        else:
+            print(f"Project '{project['name']}' does not contain a .gitlab-ci.yml file in '{args.subfolder if args.subfolder else 'root'}'.")
+
+    page += 1  # Go to the next page

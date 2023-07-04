@@ -1,43 +1,43 @@
 import requests
 import json
-import argparse
+import os
 
-# Argument parsing
-parser = argparse.ArgumentParser(description="Check for .gitlab-ci.yml in GitLab projects")
-parser.add_argument('-s', '--subfolder', help="Subfolder to check for .gitlab-ci.yml", default="")
-args = parser.parse_args()
+# If the token is set in the environment, use it
+access_token = os.getenv('GITLAB_ACCESS_TOKEN')
 
-# GitLab personal access token
-gitlab_token = 'your_gitlab_token'
-username = 'your_username'
+# If the token is not set in the environment, prompt for it
+if access_token is None:
+    access_token = input("Please enter your GitLab access token: ")
 
-# List all projects of a user
+gitlab_url = 'https://gitlab.com/api/v4/projects'  # URL for GitLab's API for projects
+
+# Define headers for the request
+headers = {
+    'Private-Token': access_token
+}
+
 page = 1
+per_page = 100  # Maximum allowed by GitLab
+
 while True:
-    response = requests.get(
-        f'https://gitlab.com/api/v4/users/{username}/projects?page={page}&per_page=100',
-        headers={'Private-Token': gitlab_token}
-    )
+    # Send GET request to GitLab's API
+    response = requests.get(f'{gitlab_url}?page={page}&per_page={per_page}', headers=headers)
 
-    if response.status_code != 200:
-        print("Failed to fetch projects.")
+    # If request is successful
+    if response.status_code == 200:
+        # Parse the JSON response
+        data = json.loads(response.text)
+
+        # If data is empty, we are done
+        if not data:
+            break
+
+        # Loop through each project in the response and print its name
+        for project in data:
+            print(project['name'])
+
+        # Go to the next page
+        page += 1
+    else:
+        print(f'Error: Unable to get the list of projects. Status code {response.status_code}')
         break
-
-    projects = response.json()
-    if not projects:
-        break  # No more projects
-
-    # Check for .gitlab-ci.yml in each project
-    for project in projects:
-        project_id = project['id']
-        file_path = f"{args.subfolder}/.gitlab-ci.yml" if args.subfolder else ".gitlab-ci.yml"
-        response = requests.get(
-            f'https://gitlab.com/api/v4/projects/{project_id}/repository/files/{file_path}/raw',
-            headers={'Private-Token': gitlab_token}
-        )
-        if response.status_code == 200:
-            print(f"Project '{project['name']}' contains a .gitlab-ci.yml file in '{args.subfolder if args.subfolder else 'root'}'.")
-        else:
-            print(f"Project '{project['name']}' does not contain a .gitlab-ci.yml file in '{args.subfolder if args.subfolder else 'root'}'.")
-
-    page += 1  # Go to the next page

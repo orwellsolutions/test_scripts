@@ -2,11 +2,12 @@ import requests
 import time
 import subprocess
 import base64
+from urllib.parse import quote
 
 source_gitlab_instance = input("Please enter the source GitLab instance URL (default: PUT GITLAB SOURCE URL HERE): ") or "PUT GITLAB SOURCE URL HERE"
 destination_gitlab_instance = input("Please enter the destination GitLab instance URL: ")
-source_project_path = input("Please enter the source project path: ")
-destination_project_path = input("Please enter the destination project path: ")
+source_project_path = quote(input("Please enter the source project path: "))
+destination_project_path = quote(input("Please enter the destination project path: "))
 
 source_private_token = input("Please enter the source private token: ")
 destination_private_token = input("Please enter the destination private token: ")
@@ -17,11 +18,11 @@ bash_command = f"your_bash_command {source_project_path}"
 output = subprocess.check_output(['bash','-c', bash_command]).decode().split('\n')
 
 # Check the output
-if any("No secrets found" in line for line in output):
-    print("'No secrets found' found in the repository. Continuing operation.")
-else:
+if all("No secrets found" not in line for line in output):
     print("Secrets found in the repository. Aborting operation.")
     exit()
+else:
+    print("'No secrets found' found in the repository. Continuing operation.")
 
 # Check if .gitlab-ci.yml exists in the repository
 response = requests.get(f"{source_gitlab_instance}/{source_project_path}/-/blob/master/.gitlab-ci.yml", headers={"PRIVATE-TOKEN": source_private_token}, verify=False)
@@ -32,8 +33,12 @@ if response.status_code == 200:
 
 headers = {"PRIVATE-TOKEN": source_private_token}
 
+# Get project ID
+response = requests.get(f"{source_gitlab_instance}/api/v4/projects/{source_project_path}", headers=headers, verify=False)
+project_id = response.json()["id"]
+
 # Request the export
-response = requests.post(f"{source_gitlab_instance}/api/v4/projects/{source_project_path}/export", headers=headers, verify=False)
+response = requests.post(f"{source_gitlab_instance}/api/v4/projects/{project_id}/export", headers=headers, verify=False)
 
 if response.status_code == 202:
     print("Export started successfully.")
@@ -43,7 +48,7 @@ else:
 
 # Get the export download link
 while True:
-    response = requests.get(f"{source_gitlab_instance}/api/v4/projects/{source_project_path}/export", headers=headers, verify=False)
+    response = requests.get(f"{source_gitlab_instance}/api/v4/projects/{project_id}/export", headers=headers, verify=False)
     print(response.json())  # print the API response
     if response.json()["export_status"] == "finished":
         download_url = response.json()["download_url"]
